@@ -1,0 +1,89 @@
+networks:
+  monitor:
+    external: true
+services:
+  node-exporter:
+    image: 'prom/node-exporter:latest'
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - '/proc:/host/proc:ro'
+      - '/sys:/host/sys:ro'
+      - '/:/rootfs:ro'
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitor
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--spider'
+        - '-q'
+        - 'http://localhost:9100/'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  cadvisor:
+    image: 'gcr.io/cadvisor/cadvisor:latest'
+    container_name: cadvisor
+    restart: unless-stopped
+    volumes:
+      - '/:/rootfs:ro'
+      - '/var/run:/var/run:ro'
+      - '/sys:/sys:ro'
+      - '/var/lib/docker/:/var/lib/docker:ro'
+    command:
+      - '--housekeeping_interval=30s'
+      - '--docker_only=true'
+      - '--store_container_labels=false'
+      - '--whitelisted_container_labels=name,instance '
+    networks:
+      - monitor
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '-q'
+        - '--spider'
+        - 'http://localhost:8080/metrics'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  redis_exporter_coolify:
+    image: 'oliver006/redis_exporter:latest'
+    container_name: redis_exporter_coolify
+    environment:
+      - 'REDIS_ADDR=redis://coolify-redis:6379'
+      - 'REDIS_PASSWORD=${REDIS_COOLIFY_PASSWORD}'
+    restart: unless-stopped
+    networks:
+      - monitor
+    healthcheck:
+      test:
+        - NONE
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  blackbox_exporter:
+    image: 'prom/blackbox-exporter:latest'
+    container_name: blackbox_exporter
+    restart: unless-stopped
+    volumes:
+      - './blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml'
+    networks:
+      - monitor
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '-q'
+        - '--spider'
+        - 'http://localhost:9115/metrics'
+      interval: 30s
+      timeout: 5s
+      retries: 3
